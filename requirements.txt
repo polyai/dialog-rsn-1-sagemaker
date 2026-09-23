@@ -1,0 +1,5 @@
+# Pinned to the openai release the Dialog-RSN-1 endpoint is built against. The server emits events
+# with these exact models, so a newer or older client would add version skew to any difference
+# you see. Bump deliberately.
+openai[realtime]==3.0.0
+boto3>=1.35

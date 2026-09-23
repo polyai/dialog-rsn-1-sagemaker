@@ -1,0 +1,5 @@
+.env
+.venv/
+bridge/node_modules/
+.ipynb_checkpoints/
+__pycache__/

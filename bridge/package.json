@@ -1,0 +1,15 @@
+{
+  "name": "dialog-rsn-1-sagemaker-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local WebSocket fronting a SageMaker bidirectional-streaming endpoint",
+  "scripts": {
+    "start": "node bridge.mjs",
+    "test": "node bridge_test.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sagemaker-runtime-http2": "^3.1123.0",
+    "ws": "^8.18.0"
+  }
+}
