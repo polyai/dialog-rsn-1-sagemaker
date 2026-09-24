@@ -9,7 +9,7 @@
     "test": "node bridge_test.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-sagemaker-runtime-http2": "^3.1123.0",
-    "ws": "^8.18.0"
+    "@aws-sdk/client-sagemaker-runtime-http2": "^3.1139.0",
+    "ws": "^8.21.3"
   }
 }

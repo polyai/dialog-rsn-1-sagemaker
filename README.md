@@ -31,6 +31,10 @@ connection, and copies frames across unchanged in both directions. Your client a
 see the protocol they expect. Credentials come from the standard AWS credential chain, so
 there is nothing to configure beyond the endpoint name.
 
+The bridge has no authentication of its own. It listens on 127.0.0.1 only, but any process on the
+same machine can connect and spend your AWS credentials through it. Run it on a machine you
+control, and stop it when you are done.
+
 It is Node rather than Python because the SageMaker runtime serves HTTP/2 without advertising it
 via ALPN. Node connects by prior knowledge. The Python AWS SDK cannot.
 
@@ -46,6 +50,9 @@ and carries the same JSON events in `PayloadPart` works too.
   the execution role. On a laptop, set `SAGEMAKER_ROLE_ARN`.
 - Service quota of at least 1 for the instance type you deploy on, under "endpoint usage". A fresh
   account has 0 and the endpoint fails several minutes in rather than immediately.
+- `ml.p4d.24xlarge` or `ml.p5.48xlarge`, with the inference AMI the notebook sets. SageMaker has
+  at times refused that AMI on p4d with `Invalid combination: instance p4d and InferenceAmiVersion`
+  and accepted the same request days later. If you see it, retry, or use p5.
 - Node.js 20 or newer for the bridge, and Python 3.10 or newer for the notebook.
 
 ## Quick start
@@ -100,7 +107,10 @@ Authentication happened already, on the SigV4 call the bridge made to SageMaker.
 | Not out | Audio. `output_modalities` is `["text"]` and a request for audio output is refused. |
 | Context window | 32,000 tokens. Old audio is compacted to its transcript automatically; a conversation that is long in text gets `context_length_exceeded`. |
 | Session | 30 minutes per connection, a hard cap SageMaker enforces. Reconnect before it and replay what matters. An idle connection is closed after 5 minutes. |
-| Language | English. |
+| Language | English by default. Set `poly_response_language` on the session to an ISO 639 tag such as `pt-BR`, or plain words such as "Southern US English", and the model answers in that language. |
+
+The 30-minute cap is SageMaker's, not the model's. AWS does not document it; PolyAI measured it on
+live endpoints. The 5-minute idle close is the model server's own.
 
 PolyAI's additions to the protocol are fields on events the protocol already has, never new event
 types, so a stock SDK reads them from `model_extra` and ignores what it does not know:
@@ -111,6 +121,8 @@ types, so a stock SDK reads them from `model_extra` and ignores what it does not
 - `response.poly_cited_topics` on `response.done`, the topic names the answer came from.
 - `response.poly_out_of_domain` on `response.done`, whether the model judged the request outside
   this deployment's scope.
+- `session.poly_response_language`, the language the model answers in. Unset, the instructions
+  decide.
 
 ## Building a voice agent on top
 
