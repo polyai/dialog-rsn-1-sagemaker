@@ -19,6 +19,7 @@ on SageMaker, plus a notebook that walks through the whole thing.
 | `bridge/` | A small Node process that exposes a SageMaker endpoint as a local WebSocket. See below. |
 | `audio/` | Short 16 kHz PCM16 WAV files the notebook speaks to the model. Synthetic voices. |
 | `requirements.txt` | The Python side: the `openai` SDK, pinned, and `boto3`. |
+| `tests/` | CI checks. `notebook_smoke.py` runs the notebook's conversations against a stub server, no AWS needed. |
 
 ## Why there is a bridge
 
