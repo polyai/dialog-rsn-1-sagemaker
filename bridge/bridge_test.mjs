@@ -2,8 +2,8 @@
  * node bridge_test.mjs
  *
  * Drives the pump with a stub client, so everything except the AWS transport is covered without
- * an endpoint: frames reach the request Body, responses reach the socket, and a stream error
- * closes the socket instead of hanging it.
+ * an endpoint: frames reach the request Body, responses reach the socket, a client disconnect
+ * cancels the SageMaker stream, and a stream error closes the socket instead of hanging it.
  */
 
 import assert from "node:assert/strict";
@@ -84,6 +84,32 @@ async function testBinaryFramesKeepTheirType() {
   });
 }
 
+async function testDisconnectCancelsTheStream() {
+  // A response stream that never ends by itself, like a live endpoint. Only the abort stops it.
+  let signal;
+  const client = {
+    async send(command, options) {
+      signal = options?.abortSignal;
+      return {
+        Body: (async function* () {
+          await new Promise((resolve) => signal.addEventListener("abort", resolve));
+        })(),
+      };
+    },
+  };
+  await withBridge(client, async () => {
+    const ws = await connect();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.ok(signal, "the bridge should pass an abort signal to the SDK");
+    assert.equal(signal.aborted, false);
+
+    ws.close();
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(signal.aborted, true, "a client disconnect should cancel the SageMaker stream");
+  });
+}
+
 async function testStreamErrorClosesTheSocket() {
   // The failure the bridge exists to make visible: without this the client just stops hearing back.
   const client = stubClient([{ ModelStreamError: { Message: "model exploded" } }]);
@@ -99,7 +125,12 @@ async function testStreamErrorClosesTheSocket() {
   });
 }
 
-for (const test of [testFramesRoundTrip, testBinaryFramesKeepTheirType, testStreamErrorClosesTheSocket]) {
+for (const test of [
+  testFramesRoundTrip,
+  testBinaryFramesKeepTheirType,
+  testDisconnectCancelsTheStream,
+  testStreamErrorClosesTheSocket,
+]) {
   await test();
   console.log(`ok - ${test.name}`);
 }

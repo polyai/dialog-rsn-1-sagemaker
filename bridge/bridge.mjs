@@ -17,6 +17,8 @@ import {
   InvokeEndpointWithBidirectionalStreamCommand,
   SageMakerRuntimeHTTP2Client,
 } from "@aws-sdk/client-sagemaker-runtime-http2";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 
 /** An async iterable a producer pushes into: the request Body the SDK reads frames from. */
@@ -54,6 +56,14 @@ function frameQueue() {
 
 async function pump(ws, client, endpointName) {
   const body = frameQueue();
+  // Closing the request Body is not enough on its own: the response loop below keeps reading until
+  // the endpoint ends the stream, holding an HTTP/2 stream and a session slot until the idle close.
+  // Aborting cancels the SageMaker stream as soon as the client goes.
+  const abort = new AbortController();
+  const hangUp = () => {
+    body.close();
+    abort.abort();
+  };
 
   ws.on("message", (data, isBinary) => {
     body.push({
@@ -65,8 +75,8 @@ async function pump(ws, client, endpointName) {
       },
     });
   });
-  ws.on("close", () => body.close());
-  ws.on("error", () => body.close());
+  ws.on("close", hangUp);
+  ws.on("error", hangUp);
 
   try {
     const response = await client.send(
@@ -74,6 +84,7 @@ async function pump(ws, client, endpointName) {
         EndpointName: endpointName,
         Body: body,
       }),
+      { abortSignal: abort.signal },
     );
 
     for await (const event of response.Body) {
@@ -92,6 +103,7 @@ async function pump(ws, client, endpointName) {
     }
     ws.close(1000);
   } catch (error) {
+    if (abort.signal.aborted) return; // the client left first; there is no one to tell
     ws.close(1011, String(error.message ?? error).slice(0, 120));
   }
 }
@@ -104,7 +116,9 @@ export function startBridge({ endpointName, port = 8079, region, client }) {
   return wss;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run directly, not imported by the tests. realpath because Node resolves a symlinked entry point
+// in import.meta.url but not in argv; fileURLToPath because a file:// URL is not a Windows path.
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const endpointName = process.env.SAGEMAKER_ENDPOINT;
   if (!endpointName) {
     console.error("SAGEMAKER_ENDPOINT is required");
