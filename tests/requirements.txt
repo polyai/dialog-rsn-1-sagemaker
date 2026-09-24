@@ -1,0 +1,2 @@
+-r ../requirements.txt
+nbformat>=5.10
